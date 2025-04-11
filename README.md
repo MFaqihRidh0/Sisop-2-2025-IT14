@@ -78,7 +78,7 @@ Program **action.c** merupakan solusi yang menggabungkan beberapa mode operasi:
 
 Berikut cuplikan kode dari Mode 1 di file `action.c`:
 
-```c
+```
 if (argc == 1) {
     if (directory_exists("Clues")) {
         printf("Folder Clues sudah ada. Tidak mengekstrak apa pun.\n");
@@ -95,7 +95,7 @@ if (argc == 1) {
         printf("Berhasil mengekstrak dan menghapus Clues.zip.\n");
     }
 }
-
+```
 #### Output
 
 #### B. Filtering the files
@@ -242,7 +242,7 @@ else if (argc == 3 && strcmp(argv[1], "-m") == 0 && strcmp(argv[2], "Filter") ==
     - **`fgets()`** dan **`fputs()`** digunakan untuk membaca dan menulis isi file.
     - **`remove()`** digunakan untuk menghapus file asli setelah proses penggabungan.
 
----
+
 
 ### Flow Diagram Sederhana Mode 3
 1. **Mulai:** Jalankan program dengan argumen `-m Combine`.
@@ -347,6 +347,7 @@ else if (argc == 3 && strcmp(argv[1], "-m") == 0 && strcmp(argv[2], "Combine") =
 #### Output
 
 #### D. Decode the file
+
 ## Mode 4: Decode (ROT13 pada Combined.txt)
 
 ### Alur Eksekusi Mode 4
@@ -382,7 +383,7 @@ else if (argc == 3 && strcmp(argv[1], "-m") == 0 && strcmp(argv[2], "Combine") =
 
 ### Cuplikan Kode Mode 4 dari `action.c`
 
-```c
+```
 else if (argc == 3 && strcmp(argv[1], "-m") == 0 && strcmp(argv[2], "Decode") == 0) {
     FILE *combined = fopen("Combined.txt", "r");
     if (!combined) {
