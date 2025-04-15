@@ -97,6 +97,7 @@ if (argc == 1) {
 }
 ```
 #### Output
+![output](assets/soal%20nomor%201%20(2).png)
 
 #### B. Filtering the files
 ## Mode 2: Filter File dari Folder Clues ke Folder Filtered
@@ -192,6 +193,7 @@ else if (argc == 3 && strcmp(argv[1], "-m") == 0 && strcmp(argv[2], "Filter") ==
 }
 ```
 #### Output
+![output](assets/soal%20nomor%201%20B%20(3).png)
 
 #### C. Combine the files content
 ## Mode 3: Combine File dari Folder Filtered ke dalam Combined.txt
@@ -345,6 +347,7 @@ else if (argc == 3 && strcmp(argv[1], "-m") == 0 && strcmp(argv[2], "Combine") =
 }
 ```
 #### Output
+![output](assets/soal%20nomor%201%20C%20(4).png)
 
 #### D. Decode the file
 
@@ -405,11 +408,13 @@ else if (argc == 3 && strcmp(argv[1], "-m") == 0 && strcmp(argv[2], "Decode") ==
 ```
 
 #### Output
+![output](assets/Soal%201%20D.png)
 
 #### E. Filtering the files
 masukkan password ke website dengan password yaitu BewareOfAmpy
 
 #### Output
+![output](assets/Soal%20nomor%201%20selesai.png)
 
 # soal-2
 
