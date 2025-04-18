@@ -1,4 +1,4 @@
-![image](https://github.com/user-attachments/assets/c66dc709-92c2-454b-850d-5c059ed76437)# LAPRES Praktikum Sistem Operasi Modul 2 - IT14
+# LAPRES Praktikum Sistem Operasi Modul 2 - IT14
 
 ## Anggota
 1. Muhammad Fatihul Qolbi Ash Shiddiqi (5027241023)
