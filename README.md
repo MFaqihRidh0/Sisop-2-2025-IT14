@@ -1290,6 +1290,9 @@ void jadikan_daemon() {
 ```
 - Redirect stdin, stdout, stderr ke `/dev/null`
 
+### Output di log
+![output](assets/soal4_output_daemon.png)
+
 ## Fungsi: pantau_proses_user
 ```
 void pantau_proses_user(const char *user, int mode_fail, const char *mode_nama)
@@ -1307,7 +1310,6 @@ void pantau_proses_user(const char *user, int mode_fail, const char *mode_nama)
 - Kalau `debugmon` → log RUNNING
 - Kalau bukan, dan `mode_fail` aktif:
   - Kill proses
-  - Log FAILED
 
 Akhir
 ```
@@ -1321,6 +1323,9 @@ sleep(5);
 - Kill proses tersebut dengan `SIGTERM`
 - Catat ke log
 
+### Output di log
+![output](assets/soal4_output_stop.png)
+
 ## Fungsi main
 - Command line argument
 ```
@@ -1333,7 +1338,18 @@ if (argc != 3) {
 
 Command mode:
 - `list` → tampilkan semua proses milik user: pid, nama, mem
+
+  ### Output di log
+![output](assets/soal4_output_list.png)
+
 - `daemon` → jalankan daemon monitor mode normal
 - `fail` → jalankan daemon monitor mode kill
+
+### Output di log
+![output](assets/soal4_output_fail.png)
+
 - `stop` → hentikan daemon debugmon user
 - `revert` → sama seperti stop tapi log-nya revert
+
+### Output di log
+![output](assets/soal4_output_revert.png)
