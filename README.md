@@ -635,6 +635,7 @@ void quarantine_files() {
 - Jika pemindahan berhasil, maka log akan dicatat dengan perintah `log_activity("quarantine", ...)`.
 
 2. Fungsi clean_starterkit_dir
+
 Fungsi ini digunakan untuk menghapus semua file di dalam folder starter_kit/ sebelum proses restore dari quarantine/.
 
 ```C
