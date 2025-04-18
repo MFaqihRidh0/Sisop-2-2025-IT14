@@ -417,6 +417,260 @@ masukkan password ke website dengan password yaitu BewareOfAmpy
 ![output](assets/Soal%20nomor%201%20selesai.png)
 
 # soal-2
+**Dikerjakan Oleh Muhammad Fatihul Qolbi Ash Shiddiqi (5027241023)**
+
+## Deskripsi Soal 
+
+Komputer Kanade terkena malware yang membuat komputer menjadi lebih lambat, sehingga ia harus membuat prorgram dengan format :
+
+- **./starterkit --decrypt**: Mendecrypt nama dari file yang diencrypt menggunakan algoritma Base64.
+- **./starterkit --quarantine**: Memindahkan file dari starter_kit ke quarantine untuk di karantina sementara (Waspada jika virus / malware berbahaya)   
+- **./starterkit --return**: Mengembalikan file dari yang telah di karantina dalam directory quarantine ke directory starter_kit (malware tidak berbahaya) 
+- **./starterkit --eradicate**: Menghapus seluruh file yang ada di dalam directory karantina (Karena dianggap berbahaya)
+- **./starterkit --shutdown**:  Mematikan program decrypt miliknya dapat secara aman berdasarkan PID dari proses program tersebut.
+ 
+#### A. Setiap Program yang dia buat harus bisa memdownload dan unzip sebuah starter kit berisi file - file acak (sudah termasuk virus) serta menghapus file zip asli setelah melakukan unzip.
+
+```C
+void download_and_extract() {
+    pid_t pid;
+
+    if ((pid = fork()) == 0) {
+        char *argv[] = {"wget", "--no-check-certificate",
+                        "https://docs.google.com/uc?export=download&id=" FILE_ID,
+                        "-O", ZIP_FILE, NULL};
+        execvp("wget", argv);
+        exit(1);
+    }
+    waitpid(pid, NULL, 0);
+
+    if ((pid = fork()) == 0) {
+        char *argv[] = {"unzip", "-o", ZIP_FILE, "-d", STARTERKIT_DIR, NULL};
+        execvp("unzip", argv);
+        exit(1);
+    }
+    waitpid(pid, NULL, 0);
+
+    if ((pid = fork()) == 0) {
+        char *argv[] = {"rm", "-f", ZIP_FILE, NULL};
+        execvp("rm", argv);
+        exit(1);
+    }
+    waitpid(pid, NULL, 0);
+
+    log_activity("info", "Downloaded and extracted starterkit.");
+}
+```
+
+1. Download File Zip
+   
+```C
+if ((pid = fork()) == 0) {
+    char *argv[] = {"wget", "--no-check-certificate",
+                    "https://docs.google.com/uc?export=download&id=" FILE_ID,
+                    "-O", ZIP_FILE, NULL};
+    execvp("wget", argv);
+    exit(1);
+}
+waitpid(pid, NULL, 0);
+```
+
+- `pid` → Mendeklarasikan variabel pid untuk menyimpan hasil dari proses fork().
+- `fork()` → Membuat proses anak.
+- Jika proses anak `(pid == 0)` , maka menjalankan perintah `wget` untuk mengunduh file dari Google Drive ke dalam file `ZIP_FILE`.
+- `--no-check-certificate` → Digunakan untuk menghindari error SSL.
+- `-O ZIP_FILE ` → Menyimpan file hasil unduhan dengan nama tertentu.
+- `execvp()` → Menggantikan proses anak dengan wget.
+- Jika `execvp()` gagal, maka `exit(1)` akan menghentikan proses dengan kode error.
+- `waitpid()` → Memastikan proses induk menunggu proses download selesai sebelum lanjut ke tahap berikutnya.
+
+2. Proses Ekstraksi ZIP
+
+```C
+if ((pid = fork()) == 0) {
+    char *argv[] = {"unzip", "-o", ZIP_FILE, "-d", STARTERKIT_DIR, NULL};
+    execvp("unzip", argv);
+    exit(1);
+}
+waitpid(pid, NULL, 0);
+```
+
+- Proses anak kedua dibentuk dengan `fork()`.
+- Eksekusi perintah unzip untuk mengekstrak isi file ZIP ke direktori `STARTERKIT_DIR`.
+- `-o `digunakan untuk overwrite file jika sudah ada sebelumnya.
+- `-d` STARTERKIT_DIR menentukan folder tujuan ekstraksi.
+- Sama seperti sebelumnya, `execvp()` digunakan untuk mengeksekusi unzip, dan `waitpid()` menunggu proses ini selesai.
+
+3. Menghapus file Zip
+
+```C
+if ((pid = fork()) == 0) {
+    char *argv[] = {"rm", "-f", ZIP_FILE, NULL};
+    execvp("rm", argv);
+    exit(1);
+}
+waitpid(pid, NULL, 0);
+```
+
+- Membuat proses anak ketiga dengan `fork()`.
+- Menjalankan perintah `rm -f` ZIP_FILE untuk menghapus file ZIP setelah selesai diekstrak.
+- `-f` (force) digunakan agar file dihapus tanpa konfirmasi dan tanpa error jika file tidak ada.
+- `waitpid()` digunakan untuk menunggu proses ini selesai sebelum melanjutkan ke tahap berikutnya.
+
+##### Output 
+
+![image alt](https://github.com/MFaqihRidh0/Sisop-2-2025-IT14/blob/main/assets/Soal2%20Download%20and%20Unzip.png?raw=true)
+
+#### B. On The Run - Progress Bar ( Loading )
+
+```bash
+clear
+echo -e "\nSabar Ya Lagi Loading ....."
+progress=0
+bar_length=$(($(tput cols)-10))
+
+while [ $progress -lt 100 ]; do
+    sleep $(awk -v min=0.1 -v max=1 'BEGIN{srand(); print min+rand()*(max-min)}')
+    
+    progress=$((progress + RANDOM%3 + 1))
+    [ $progress -gt 100 ] && progress=100
+    
+    filled=$(printf "_%.0s" $(seq 1 $((progress*bar_length/100))))
+    printf "\r[%-${bar_length}s] %d%%" "$filled" "$progress"
+done
+```
+
+
+- `tput cols` → Mendapatkan lebar terminal untuk progress bar responsif  
+- `awk -v min=0.1 -v max=1 ` → Menghitung waktu `sleep` acak antara 0.1-1 detik  
+- `$RANDOM%3 +1` → Increment progress acak (1-3%) per iterasi  
+- `printf "_%.0s"` → Membuat string filled dengan karakter `_`  
+- `\r` → Kembali ke awal baris untuk update progres  
+
+##### Output 
+
+![image alt](https://github.com/mutiaradiva/Sisop-1-2025-IT14/blob/main/image_for_readme/Output%20On%20the%20Run.png?raw=true)
+
+## Revisi No 3 (On the Run)
+
+##### Kesalahan : Lebar loading tidak sesuai terminal
+```bash
+bar_length=70  
+```
+
+`bar_length=70` → Menetapkan lebar terminal sepanjang 70
+
+##### Revisi : Menyesuaikan Lebar Loading dengan terminal
+
+- Menggunakan `tput cols` → untuk menentukan panjang progress bar.
+- `bar_length=$((term_width - 10))` → berfungsi untuk menentukan panjang maksimum dari progress bar dengan mengurangi 10 karakter dari lebar terminal agar tidak terlalu menempel dengan sebelah ujung terminal 
+
+![image_alt](https://github.com/mutiaradiva/Sisop-1-2025-IT14/blob/main/image_for_readme/Output%20On%20The%20Run%20Revisi.png?raw=true)
+
+#### C. Time - Waktu berjalan sesuai dengan keadaan saat ini
+
+```bash
+clear
+tput civis
+trap 'tput cnorm; clear' EXIT
+
+while true; do
+    tput cup 0 0
+    date +"%Y-%m-%d %H:%M:%S"
+    sleep 1
+done
+```
+
+- `tput civis` → Menyembunyikan kursor  
+- `trap 'tput cnorm; clear' EXIT` → Mengembalikan kursor saat program berhenti  
+- `tput cup 0 0` → Memindahkan kursor ke pojok kiri atas  
+- `date +"%Y-%m-%d %H:%M:%S"` → Format waktu lengkap dengan detik  
+- `sleep 1` → Update setiap 1 detik  
+
+##### Output
+
+![image alt](https://github.com/mutiaradiva/Sisop-1-2025-IT14/blob/main/image_for_readme/Ouput%20Time.png?raw=true)
+
+#### D. Money - Membuat Cmatrix dengan simbol Mata Uang
+
+```bash
+symbols=('$' '€' '£' '¥' '¢' '₹' '₩' '₿' '₣')
+colors=('\e[32m' '\e[33m' '\e[34m' '\e[35m' '\e[36m')
+echo -ne "\e[?25l"
+
+cols=$(tput cols)
+lines=$(tput lines)
+declare -A matrix
+
+for ((i=1; i<=lines; i++)); do
+    for ((j=1; j<=cols; j++)); do
+        matrix[$i,$j]=" "
+    done
+done
+
+while true; do
+    # Update kolom atas
+    for ((j=1; j<=cols; j++)); do
+        (( RANDOM % 20 == 0 )) && matrix[1,$j]="${colors[RANDOM%5]}${symbols[RANDOM%9]}\e[0m"
+    done
+    
+    for ((i=lines; i>1; i--)); do
+        for ((j=1; j<=cols; j++)); do
+            matrix[$i,$j]=${matrix[$((i-1)),$j]}
+        done
+    done
+    
+
+    clear
+    for ((i=1; i<=lines; i++)); do
+        line=""
+        for ((j=1; j<=cols; j++)); do
+            line+="${matrix[$i,$j]}"
+        done
+        echo -n "$line"
+    done
+    sleep 0.05
+done
+```
+
+- `matrix 2D array` → Menyimpan status layar  
+- `RANDOM % 20` → Probabilitas 5% munculkan simbol baru
+- `ANSI color codes` → Menghasilkan warna acak  
+- `Double loop` → Menggeser semua karakter ke bawah  
+- `sleep 0.05` → jeda sebelum menampilkan simbol lain setiap 0,05 detik
+
+##### Output
+
+![image alt](https://github.com/mutiaradiva/Sisop-1-2025-IT14/blob/main/image_for_readme/Output%20Money.png?raw=true)
+
+#### E. Brain Damage - Task Manager
+
+```bash
+clear
+tput civis
+trap 'tput cnorm; exit' INT
+
+while true; do
+    tput cup 0 0
+    echo "===== Memory Usage ====="
+    free -m | awk 'NR==2{printf "Total: %sMB | Used: %sMB | Free: %sMB\n", $2, $3, $4}'
+    
+    echo -e "\n===== Top Processes ====="
+    ps -eo pid,%mem,%cpu,comm --sort=-%mem | head -n 10
+    
+    sleep 1
+done
+```
+
+- `free -m` → Menampilkan penggunaan memori dalam MB  
+- `ps -eo` → Menampilkan daftar proses dengan format khusus  
+- `--sort=-%mem` → Mengurutkan proses berdasarkan penggunaan memori tertinggi  
+- `tput cup` → Memposisikan kursor untuk refresh layar tanpa `clear` untuk menghindari flicker  
+
+##### Output 
+
+![image alt](https://github.com/mutiaradiva/Sisop-1-2025-IT14/blob/main/image_for_readme/Output%20Brain%20Damage.png?raw=true)
+
 
 # soal-3
 ## Fungsi daemonize()
