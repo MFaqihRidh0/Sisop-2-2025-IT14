@@ -1,4 +1,4 @@
-# LAPRES Praktikum Sistem Operasi Modul 2 - IT14
+![image](https://github.com/user-attachments/assets/c66dc709-92c2-454b-850d-5c059ed76437)# LAPRES Praktikum Sistem Operasi Modul 2 - IT14
 
 ## Anggota
 1. Muhammad Fatihul Qolbi Ash Shiddiqi (5027241023)
@@ -521,158 +521,368 @@ waitpid(pid, NULL, 0);
 
 ![image alt](https://github.com/MFaqihRidh0/Sisop-2-2025-IT14/blob/main/assets/Soal2%20Download%20and%20Unzip.png?raw=true)
 
-#### B. On The Run - Progress Bar ( Loading )
+#### B. Mendecrypt nama dari file yang diencrypt menggunakan algoritma Base64.
 
-```bash
-clear
-echo -e "\nSabar Ya Lagi Loading ....."
-progress=0
-bar_length=$(($(tput cols)-10))
+```C
+char *base64_decode(const char *input) {
+    BIO *bio, *b64;
+    int input_len = strlen(input);
 
-while [ $progress -lt 100 ]; do
-    sleep $(awk -v min=0.1 -v max=1 'BEGIN{srand(); print min+rand()*(max-min)}')
-    
-    progress=$((progress + RANDOM%3 + 1))
-    [ $progress -gt 100 ] && progress=100
-    
-    filled=$(printf "_%.0s" $(seq 1 $((progress*bar_length/100))))
-    printf "\r[%-${bar_length}s] %d%%" "$filled" "$progress"
-done
+    int max_decoded_len = (input_len * 3) / 4;
+    char *temp = malloc(max_decoded_len + 1);
+    memset(temp, 0, max_decoded_len + 1);
+
+    bio = BIO_new_mem_buf(input, -1);
+    b64 = BIO_new(BIO_f_base64());
+    bio = BIO_push(b64, bio);
+    BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
+
+    int decoded_len = BIO_read(bio, temp, max_decoded_len);
+    temp[decoded_len] = '\0';
+
+    BIO_free_all(bio);
+
+    char *cleaned = malloc(decoded_len + 1);
+    int j = 0;
+    for (int i = 0; i < decoded_len; i++) {
+        if (temp[i] != '\n' && temp[i] != '\r') {
+            cleaned[j++] = temp[i];
+        }
+    }
+    cleaned[j] = '\0';
+
+    free(temp);
+    return cleaned;
+}
+
 ```
 
+- `BIO dan BIO_f_base64()` → Digunakan dari library OpenSSL untuk proses decoding Base64.
+- `BIO_new_mem_buf()` → Membuat stream memori dari input string Base64.
+- `BIO_push()` → Menggabungkan stream decoding Base64 ke buffer input.
+- `BIO_set_flags(...NO_NL)` → Menonaktifkan pengolahan newline, agar decoding berjalan mulus.
+- `BIO_read()` → Melakukan proses decoding dari Base64 ke buffer temp.
+- `Karakter '\n' dan '\r'` dibersihkan dari hasil decode agar nama file bersih.
+- Fungsi akan mengembalikan string hasil decode yang telah dibersihkan dari karakter newline.
 
-- `tput cols` → Mendapatkan lebar terminal untuk progress bar responsif  
-- `awk -v min=0.1 -v max=1 ` → Menghitung waktu `sleep` acak antara 0.1-1 detik  
-- `$RANDOM%3 +1` → Increment progress acak (1-3%) per iterasi  
-- `printf "_%.0s"` → Membuat string filled dengan karakter `_`  
-- `\r` → Kembali ke awal baris untuk update progres  
+```C
+void decrypt_filenames() {
+    DIR *dir = opendir(QUARANTINE_DIR);
+    if (!dir) return;
+
+    struct dirent *entry;
+    char oldpath[512], newpath[512];
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_name[0] == '.') continue;
+
+        snprintf(oldpath, sizeof(oldpath), "%s/%s", QUARANTINE_DIR, entry->d_name);
+        char *decoded = base64_decode(entry->d_name);
+
+        if (decoded && strlen(decoded) > 0) {
+            snprintf(newpath, sizeof(newpath), "%s/%s", QUARANTINE_DIR, decoded);
+            if (rename(oldpath, newpath) == 0) log_activity("decode", decoded);
+            free(decoded);
+        }
+    }
+
+    closedir(dir);
+}
+```
+
+- `opendir()` → Membuka direktori QUARANTINE_DIR.
+- `readdir()` → Membaca isi direktori satu per satu.
+- `if (entry->d_name[0] == '.') continue;` → Menghindari file khusus seperti . dan ...
+- `base64_decode()` → Mendekripsi nama file dari format Base64 ke nama aslinya.
+- `rename()` → Mengubah nama file dari nama terenkripsi menjadi nama asli.
+- Jika rename berhasil, akan dicatat ke dalam log menggunakan `log_activity("decode", ...)`.
+- `free(decoded)` → Membersihkan memori hasil decoding agar tidak terjadi memory leak.
 
 ##### Output 
 
-![image alt](https://github.com/mutiaradiva/Sisop-1-2025-IT14/blob/main/image_for_readme/Output%20On%20the%20Run.png?raw=true)
+![image alt](https://github.com/MFaqihRidh0/Sisop-2-2025-IT14/blob/main/assets/Soal2%20decrypt.png?raw=true)
 
-## Revisi No 3 (On the Run)
+#### C. Menambahkan fitur untuk memindahkan file yang ada pada directory starter kit ke directory karantina, dan begitu juga sebaliknya.
 
-##### Kesalahan : Lebar loading tidak sesuai terminal
-```bash
-bar_length=70  
+1. Fungsi quarantine_files
+
+```C
+void quarantine_files() {
+    DIR *dir = opendir(STARTERKIT_DIR);
+    if (!dir) return;
+
+    struct dirent *entry;
+    char from[512], to[512];
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_name[0] == '.') continue;
+        snprintf(from, sizeof(from), "%s/%s", STARTERKIT_DIR, entry->d_name);
+        snprintf(to, sizeof(to), "%s/%s", QUARANTINE_DIR, entry->d_name);
+
+        if (move_file(from, to) == 0)
+            log_activity("quarantine", entry->d_name);
+    }
+
+    closedir(dir);
+}
 ```
 
-`bar_length=70` → Menetapkan lebar terminal sepanjang 70
+- `opendir()` → Membuka folder starter_kit/.
+- `readdir()` → Membaca setiap file dalam folder tersebut.
+- File yang tersembunyi atau bernama ./.. akan dilewati.
+- Menggunakan `snprintf()` untuk menyusun path asal (from) dan path tujuan (to).
+- `move_file()` → Fungsi buatan untuk memindahkan file dari starter_kit/ ke quarantine/.
+- Jika pemindahan berhasil, maka log akan dicatat dengan perintah `log_activity("quarantine", ...)`.
 
-##### Revisi : Menyesuaikan Lebar Loading dengan terminal
+2. Fungsi clean_starterkit_dir
+Fungsi ini digunakan untuk menghapus semua file di dalam folder starter_kit/ sebelum proses restore dari quarantine/.
 
-- Menggunakan `tput cols` → untuk menentukan panjang progress bar.
-- `bar_length=$((term_width - 10))` → berfungsi untuk menentukan panjang maksimum dari progress bar dengan mengurangi 10 karakter dari lebar terminal agar tidak terlalu menempel dengan sebelah ujung terminal 
+```C
+void clean_starterkit_dir() {
+    DIR *dir = opendir(STARTERKIT_DIR);
+    if (!dir) return;
 
-![image_alt](https://github.com/mutiaradiva/Sisop-1-2025-IT14/blob/main/image_for_readme/Output%20On%20The%20Run%20Revisi.png?raw=true)
+    struct dirent *entry;
+    char path[512];
 
-#### C. Time - Waktu berjalan sesuai dengan keadaan saat ini
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_name[0] == '.') continue;
+        snprintf(path, sizeof(path), "%s/%s", STARTERKIT_DIR, entry->d_name);
+        remove(path);
+    }
 
-```bash
-clear
-tput civis
-trap 'tput cnorm; clear' EXIT
-
-while true; do
-    tput cup 0 0
-    date +"%Y-%m-%d %H:%M:%S"
-    sleep 1
-done
+    closedir(dir);
+}
 ```
 
-- `tput civis` → Menyembunyikan kursor  
-- `trap 'tput cnorm; clear' EXIT` → Mengembalikan kursor saat program berhenti  
-- `tput cup 0 0` → Memindahkan kursor ke pojok kiri atas  
-- `date +"%Y-%m-%d %H:%M:%S"` → Format waktu lengkap dengan detik  
-- `sleep 1` → Update setiap 1 detik  
+- `opendir()` membuka direktori.
+- File tersembunyi tetap di-skip.
+- `remove()` digunakan untuk menghapus setiap file satu per satu.
 
-##### Output
+Fungsi ini berguna ketika ingin memastikan isi `starter_kit/` bersih sebelum file dipulihkan dari quarantine/.
 
-![image alt](https://github.com/mutiaradiva/Sisop-1-2025-IT14/blob/main/image_for_readme/Ouput%20Time.png?raw=true)
+3. Fungsi return_files
 
-#### D. Money - Membuat Cmatrix dengan simbol Mata Uang
+```C
+void return_files() {
+    clean_starterkit_dir(); // Bersihkan starter_kit terlebih dahulu
 
-```bash
-symbols=('$' '€' '£' '¥' '¢' '₹' '₩' '₿' '₣')
-colors=('\e[32m' '\e[33m' '\e[34m' '\e[35m' '\e[36m')
-echo -ne "\e[?25l"
+    DIR *dir = opendir(QUARANTINE_DIR);
+    if (!dir) return;
 
-cols=$(tput cols)
-lines=$(tput lines)
-declare -A matrix
+    struct dirent *entry;
+    char from[512], to[512];
 
-for ((i=1; i<=lines; i++)); do
-    for ((j=1; j<=cols; j++)); do
-        matrix[$i,$j]=" "
-    done
-done
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_name[0] == '.') continue;
+        snprintf(from, sizeof(from), "%s/%s", QUARANTINE_DIR, entry->d_name);
+        snprintf(to, sizeof(to), "%s/%s", STARTERKIT_DIR, entry->d_name);
 
-while true; do
-    # Update kolom atas
-    for ((j=1; j<=cols; j++)); do
-        (( RANDOM % 20 == 0 )) && matrix[1,$j]="${colors[RANDOM%5]}${symbols[RANDOM%9]}\e[0m"
-    done
-    
-    for ((i=lines; i>1; i--)); do
-        for ((j=1; j<=cols; j++)); do
-            matrix[$i,$j]=${matrix[$((i-1)),$j]}
-        done
-    done
-    
+        if (move_file(from, to) == 0)
+            log_activity("return", entry->d_name);
+    }
 
-    clear
-    for ((i=1; i<=lines; i++)); do
-        line=""
-        for ((j=1; j<=cols; j++)); do
-            line+="${matrix[$i,$j]}"
-        done
-        echo -n "$line"
-    done
-    sleep 0.05
-done
+    closedir(dir);
+}
 ```
 
-- `matrix 2D array` → Menyimpan status layar  
-- `RANDOM % 20` → Probabilitas 5% munculkan simbol baru
-- `ANSI color codes` → Menghasilkan warna acak  
-- `Double loop` → Menggeser semua karakter ke bawah  
-- `sleep 0.05` → jeda sebelum menampilkan simbol lain setiap 0,05 detik
-
-##### Output
-
-![image alt](https://github.com/mutiaradiva/Sisop-1-2025-IT14/blob/main/image_for_readme/Output%20Money.png?raw=true)
-
-#### E. Brain Damage - Task Manager
-
-```bash
-clear
-tput civis
-trap 'tput cnorm; exit' INT
-
-while true; do
-    tput cup 0 0
-    echo "===== Memory Usage ====="
-    free -m | awk 'NR==2{printf "Total: %sMB | Used: %sMB | Free: %sMB\n", $2, $3, $4}'
-    
-    echo -e "\n===== Top Processes ====="
-    ps -eo pid,%mem,%cpu,comm --sort=-%mem | head -n 10
-    
-    sleep 1
-done
-```
-
-- `free -m` → Menampilkan penggunaan memori dalam MB  
-- `ps -eo` → Menampilkan daftar proses dengan format khusus  
-- `--sort=-%mem` → Mengurutkan proses berdasarkan penggunaan memori tertinggi  
-- `tput cup` → Memposisikan kursor untuk refresh layar tanpa `clear` untuk menghindari flicker  
+- Sebelum melakukan pengembalian file, folder `starter_kit/` dibersihkan terlebih dahulu menggunakan `clean_starterkit_dir()`.
+- Setelah bersih, setiap file di `quarantine/` akan dibaca, lalu dipindahkan ke `starter_kit/`.
+- Jika pemindahan berhasil, maka akan dicatat di log dengan kategori "return".
 
 ##### Output 
 
-![image alt](https://github.com/mutiaradiva/Sisop-1-2025-IT14/blob/main/image_for_readme/Output%20Brain%20Damage.png?raw=true)
+###### Output quarantine 
+![image alt](https://github.com/MFaqihRidh0/Sisop-2-2025-IT14/blob/main/assets/Soal2%20quarantine1.png?raw=true)
 
+###### Output quarantine 2 ketika sudah diencrypt 
+![image alt](https://github.com/MFaqihRidh0/Sisop-2-2025-IT14/blob/main/assets/Soal2%20quarantine2.png?raw=true)
+
+###### Output Return
+![image alt](https://github.com/MFaqihRidh0/Sisop-2-2025-IT14/blob/main/assets/Soal2%20Retun.png?raw=true)
+
+#### D. Menambahkan fitur untuk menghapus seluruh file yang ada di dalam directory karantina.
+
+```C
+void eradicate_quarantine() {
+    DIR *dir = opendir(QUARANTINE_DIR);
+    if (!dir) return;
+
+    struct dirent *entry;
+    char path[512];
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_name[0] == '.') continue;
+        snprintf(path, sizeof(path), "%s/%s", QUARANTINE_DIR, entry->d_name);
+
+        if (remove(path) == 0)
+            log_activity("eradicate", entry->d_name);
+    }
+
+    closedir(dir);
+}
+
+```
+
+- `DIR *dir = opendir(QUARANTINE_DIR);` → Membuka folder quarantine/ , Jika folder tidak bisa dibuka (misalnya tidak ada atau tidak punya izin), fungsi akan return.
+- `struct dirent *entry;` → Struct dirent digunakan untuk membaca isi direktori satu per satu.
+- `while ((entry = readdir(dir)) != NULL)`  → Melakukan iterasi untuk membaca semua entri (file) di dalam quarantine/.
+- `if (entry->d_name[0] == '.') continue;`  → Melewati file tersembunyi 
+- `snprintf(path, sizeof(path), "%s/%s", QUARANTINE_DIR, entry->d_name);`  → Menyusun path lengkap file dalam direktori quarantine/.
+- `if (remove(path) == 0)`  → Menghapus file menggunakan remove(). Jika berhasil (mengembalikan 0), maka log dicatat.
+- `log_activity("eradicate", entry->d_name);`  → Mencatat file yang berhasil dihapus ke dalam log dengan kategori "eradicate".
+- `closedir(dir);`  → Menutup direktori setelah selesai dibaca.
+
+##### Output
+
+![image alt](https://github.com/MFaqihRidh0/Sisop-2-2025-IT14/blob/main/assets/Soal2%20Eradicate.png?raw=true)
+
+#### E. Program decrypt dimatikan secara aman berdasarkan PID dari proses program tersebut.
+
+```C
+void shutdown_daemon() {
+    FILE *fp = popen("ps aux | grep './starterkit --decrypt' | grep -v grep", "r");
+    if (!fp) return;
+
+    char buf[512];
+    int pid, count = 0;
+
+    while (fgets(buf, sizeof(buf), fp)) {
+        if (sscanf(buf, "%*s %d", &pid) == 1) {
+            if (kill(pid, SIGTERM) == 0) {
+                char pid_str[16];
+                snprintf(pid_str, sizeof(pid_str), "%d", pid);
+                log_activity("shutdown", pid_str);
+                count++;
+            }
+        }
+    }
+
+    pclose(fp);
+    if (count == 0)
+        printf("No active decryption processes found.\n");
+    else
+        printf("Shutdown %d daemon process(es).\n", count);
+}
+```
+
+- `FILE *fp = popen("ps aux | grep './starterkit --decrypt' | grep -v grep", "r");` → Menjalankan perintah shell untuk mencari proses yang menjalankan ./starterkit --decrypt. Hasil dari perintah ini akan dibaca sebagai stream fp.
+- `if (!fp) return;` → Jika perintah gagal dijalankan atau tidak bisa membuka pipe, fungsi akan keluar.
+- `char buf[512];` → Buffer untuk menyimpan setiap baris hasil output dari popen().
+- `int pid, count = 0;` → pid menyimpan Process ID dari hasil parsing, dan count menghitung jumlah proses yang berhasil dimatikan.
+- `while (fgets(buf, sizeof(buf), fp))` → Membaca baris per baris output dari proses pencarian menggunakan fgets.
+- `if (sscanf(buf, "%*s %d", &pid) == 1)` → Mengambil PID dari baris hasil output, dengan melewati field pertama (%*s) dan mengambil field kedua sebagai PID.
+- `if (kill(pid, SIGTERM) == 0)` → Mengirim sinyal SIGTERM ke PID tersebut. Jika berhasil (mengembalikan 0), proses berhasil dimatikan.
+- `char pid_str[16];` → Buffer sementara untuk menyimpan PID dalam bentuk string.
+- `snprintf(pid_str, sizeof(pid_str), "%d", pid);` → Mengubah pid menjadi string agar bisa dicatat dalam log.
+- `log_activity("shutdown", pid_str);` → Mencatat aktivitas ke dalam log dengan kategori "shutdown" dan PID dari proses yang dimatikan.
+- `count++;` → Menambah jumlah proses yang berhasil dimatikan.
+- `pclose(fp);` → Menutup stream setelah proses popen() selesai dibaca.
+- `if (count == 0)` → Jika tidak ada proses yang ditemukan dan dimatikan, akan mencetak ke layar bahwa tidak ada proses aktif.
+- `else printf("Shutdown %d daemon process(es).\n", count);` → Jika ada proses yang berhasil dimatikan, mencetak jumlahnya ke layar.
+
+##### Tampilan PID sebelum di --shutdown
+
+![image alt](https://github.com/MFaqihRidh0/Sisop-2-2025-IT14/blob/main/assets/Soal2%20tampilan%20PID.png?raw=true)
+
+##### Output 
+
+![image alt](https://github.com/MFaqihRidh0/Sisop-2-2025-IT14/blob/main/assets/Soal2%20Shutdown.png?raw=true)
+
+#### F. Membuat error handling sederhana untuk mencegah penggunaan yang salah pada program tersebut.
+
+```C
+if (argc != 2) {
+    fprintf(stderr, "[ERROR] Invalid usage.\n");
+    fprintf(stderr, "Usage:\n");
+    fprintf(stderr, "  %s --decrypt\n", argv[0]);
+    fprintf(stderr, "  %s --shutdown\n", argv[0]);
+    fprintf(stderr, "  %s --quarantine\n", argv[0]);
+    fprintf(stderr, "  %s --return\n", argv[0]);
+    fprintf(stderr, "  %s --eradicate\n", argv[0]);
+    return 1;
+}
+
+if (strcmp(argv[1], "--decrypt") == 0)
+    start_decryption();
+else if (strcmp(argv[1], "--shutdown") == 0)
+    shutdown_daemon();
+else if (strcmp(argv[1], "--quarantine") == 0)
+    quarantine_files();
+else if (strcmp(argv[1], "--return") == 0)
+    return_files();
+else if (strcmp(argv[1], "--eradicate") == 0)
+    eradicate_quarantine();
+else {
+    fprintf(stderr, "[ERROR] Unknown option: %s\n", argv[1]);
+    return 1;
+}
+```
+
+- `if (argc != 2)` → Mengecek apakah jumlah argumen yang diberikan saat menjalankan program adalah tepat dua. Argumen pertama (argv[0]) adalah nama program itu sendiri, dan argumen kedua (argv[1]) adalah opsi perintah yang valid.
+- `fprintf(stderr, "[ERROR] Invalid usage.\n");` → Jika argumen tidak sesuai, maka pesan kesalahan akan dicetak ke stderr agar pengguna tahu bahwa cara penggunaan program salah.
+- `fprintf(stderr, "Usage: ...");` → Menampilkan petunjuk lengkap tentang bagaimana cara menggunakan program dengan benar, termasuk semua opsi yang valid: --decrypt, --shutdown, --quarantine, --return, --eradicate.
+- `return 1;` → Mengakhiri program dengan status error (1) jika argumen yang diberikan tidak valid jumlahnya.
+- `if (strcmp(argv[1], "--decrypt") == 0) ... else if (...) ... else { ... }` → Mengecek string argv[1] untuk mencocokkan dengan perintah yang valid. Jika cocok, akan dijalankan fungsi sesuai perintah tersebut.
+- `else { fprintf(stderr, "[ERROR] Unknown option: %s\n", argv[1]); return 1; }` → Jika string argumen argv[1] tidak cocok dengan semua opsi yang dikenali, maka program akan mencetak pesan error ke stderr bahwa opsi tidak dikenali, lalu keluar dengan status 1.
+
+##### Output 
+
+![image alt](https://github.com/MFaqihRidh0/Sisop-2-2025-IT14/blob/main/assets/Soal2%20Output%20Error.png?raw=true)
+
+
+#### G. Menambahkan log dari setiap penggunaan program ini dan menyimpannya ke dalam file bernama activity.log.
+
+```C
+void log_activity(const char *type, const char *message) {
+    FILE *log = fopen(LOG_FILE, "a");
+    if (!log) return;
+
+    time_t now = time(NULL);
+    struct tm *t = localtime(&now);
+    fprintf(log, "[%02d-%02d-%04d][%02d:%02d:%02d] - ",
+            t->tm_mday, t->tm_mon + 1, t->tm_year + 1900,
+            t->tm_hour, t->tm_min, t->tm_sec);
+
+    if (strcmp(type, "decrypt") == 0)
+        fprintf(log, "Successfully started decryption process with PID %s.\n", message);
+    else if (strcmp(type, "shutdown") == 0)
+        fprintf(log, "Successfully shut off decryption process with PID %s.\n", message);
+    else if (strcmp(type, "quarantine") == 0)
+        fprintf(log, "%s - Successfully moved to quarantine directory.\n", message);
+    else if (strcmp(type, "return") == 0)
+        fprintf(log, "%s - Successfully returned to starter kit directory.\n", message);
+    else if (strcmp(type, "eradicate") == 0)
+        fprintf(log, "%s - Successfully deleted.\n", message);
+    else if (strcmp(type, "decode") == 0)
+        fprintf(log, "Decoded: %s\n", message);
+    else
+        fprintf(log, "%s\n", message);
+
+    fclose(log);
+}
+```
+
+- `FILE *log = fopen(LOG_FILE, "a");` → Membuka file log (activity.log) dalam mode append, sehingga setiap entri baru akan ditambahkan di akhir file. Jika file gagal dibuka (misalnya tidak ada izin), maka fungsi langsung return.
+- `time_t now = time(NULL);` → Mengambil waktu saat ini dalam bentuk timestamp (time_t) dari sistem.
+- `struct tm *t = localtime(&now);` → Mengonversi waktu saat ini (now) menjadi struktur waktu lokal (struct tm) yang dapat digunakan untuk menampilkan tanggal dan jam secara terformat.
+- `fprintf(log, "[%02d-%02d-%04d][%02d:%02d:%02d] - ", ...)` → Menuliskan cap waktu (timestamp) dalam format [dd-mm-YYYY][HH:MM:SS] sebagai awal dari setiap entri log.
+- `if (strcmp(type, "decrypt") == 0)` → Mengecek jenis log berdasarkan argumen type. Jika "decrypt", maka dicatat bahwa proses dekripsi telah dimulai, dengan menyertakan PID dari proses (diberikan melalui message).
+- `else if (strcmp(type, "shutdown") == 0)` → Jika type adalah "shutdown", maka dicatat bahwa proses dekripsi telah dihentikan (shutdown), disertai dengan PID-nya.
+- `else if (strcmp(type, "quarantine") == 0)` → Jika type adalah "quarantine", maka dicatat bahwa file (nama file di message) telah berhasil dipindahkan ke folder karantina.
+- `else if (strcmp(type, "return") == 0)` → Jika type adalah "return", maka file telah dipindahkan kembali dari karantina ke folder starter kit.
+- `else if (strcmp(type, "eradicate") == 0)` → Jika type adalah "eradicate", maka file telah dihapus secara permanen.
+- `else if (strcmp(type, "decode") == 0)` → Jika type adalah "decode", maka dicatat hasil dekripsi (biasanya nama file asli setelah didekode dari Base64).
+- `else fprintf(log, "%s\n", message);` → Jika tipe log tidak dikenali, maka hanya mencetak message apa adanya.
+- `fclose(log);` → Menutup file log setelah entri selesai ditulis.
+
+##### Output 
+
+![image alt](https://github.com/MFaqihRidh0/Sisop-2-2025-IT14/blob/main/assets/Soal2%20Log%20Activity.png?raw=true)
 
 # soal-3
+**Dikerjakan Oleh Mutiara Diva Jaladitha (5027241083)**
+
 ## Fungsi daemonize()
 ```
 void daemonize() {
@@ -944,6 +1154,7 @@ while (1) {
 - Loop forever sleep
 
 # soal-4
+**Dikerjakan Oleh Mutiara Diva Jaladitha (5027241083)**
 
 ## Header & Macro Definition
 ```
